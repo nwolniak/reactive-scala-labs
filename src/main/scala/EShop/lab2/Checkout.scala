@@ -4,6 +4,7 @@ import EShop.lab2.Checkout._
 import akka.actor.{Actor, ActorRef, Cancellable, Props}
 import akka.event.{Logging, LoggingReceive}
 
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
@@ -37,16 +38,52 @@ class Checkout extends Actor {
   val checkoutTimerDuration = 1 seconds
   val paymentTimerDuration  = 1 seconds
 
-  def receive: Receive = ???
+  private def checkoutTimer: Cancellable = scheduler.scheduleOnce(checkoutTimerDuration, self, ExpireCheckout)
+  private def paymentTImer: Cancellable = scheduler.scheduleOnce(paymentTimerDuration, self, ExpirePayment)
 
-  def selectingDelivery(timer: Cancellable): Receive = ???
+  def receive: Receive = LoggingReceive {
+    case StartCheckout => context.become(selectingDelivery(checkoutTimer))
+  }
 
-  def selectingPaymentMethod(timer: Cancellable): Receive = ???
+  def selectingDelivery(timer: Cancellable): Receive = LoggingReceive {
+    case SelectDeliveryMethod(method: String) =>
+      log.debug(method)
+      context.become(selectingPaymentMethod(timer))
+    case ExpireCheckout =>
+      timer.cancel()
+      context.become(cancelled)
+    case CancelCheckout =>
+      timer.cancel()
+      context.become(cancelled)
+  }
 
-  def processingPayment(timer: Cancellable): Receive = ???
+  def selectingPaymentMethod(timer: Cancellable): Receive = LoggingReceive {
+    case SelectPayment(payment: String) =>
+      log.debug(payment)
+      timer.cancel()
+      context.become(processingPayment(paymentTImer))
+    case ExpireCheckout =>
+      timer.cancel()
+      context.become(cancelled)
+    case CancelCheckout =>
+      timer.cancel()
+      context.become(cancelled)
+  }
 
-  def cancelled: Receive = ???
+  def processingPayment(timer: Cancellable): Receive = LoggingReceive {
+    case ConfirmPaymentReceived =>
+      timer.cancel()
+      context.become(closed)
+    case ExpirePayment =>
+      timer.cancel()
+      context.become(cancelled)
+    case CancelCheckout =>
+      timer.cancel()
+      context.become(cancelled)
+  }
 
-  def closed: Receive = ???
+  def cancelled: Receive = _ => context.stop(self)
+
+  def closed: Receive = _ => context.stop(self)
 
 }
