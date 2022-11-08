@@ -47,7 +47,6 @@ class Checkout extends Actor {
 
   def selectingDelivery(timer: Cancellable): Receive = LoggingReceive {
     case SelectDeliveryMethod(method: String) =>
-      log.debug(method)
       context.become(selectingPaymentMethod(timer))
     case ExpireCheckout =>
       timer.cancel()
@@ -59,7 +58,6 @@ class Checkout extends Actor {
 
   def selectingPaymentMethod(timer: Cancellable): Receive = LoggingReceive {
     case SelectPayment(payment: String) =>
-      log.debug(payment)
       timer.cancel()
       context.become(processingPayment(paymentTImer))
     case ExpireCheckout =>
