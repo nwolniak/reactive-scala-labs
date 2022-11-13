@@ -24,7 +24,6 @@ class Payment(
 
   def start: Behavior[Payment.Command] = Behaviors.receiveMessage {
     case DoPayment =>
-      println("Payment: " + method)
       orderManager ! OrderManager.ConfirmPaymentReceived
       checkout ! TypedCheckout.ConfirmPaymentReceived
       Behaviors.stopped

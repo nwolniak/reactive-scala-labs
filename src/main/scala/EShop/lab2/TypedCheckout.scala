@@ -1,12 +1,12 @@
 package EShop.lab2
 
+import EShop.lab3.{OrderManager, Payment}
 import akka.actor.Cancellable
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
 
-import scala.language.postfixOps
 import scala.concurrent.duration._
-import EShop.lab3.{OrderManager, Payment}
+import scala.language.postfixOps
 
 object TypedCheckout {
   sealed trait Command
@@ -20,10 +20,10 @@ object TypedCheckout {
 
   sealed trait Event
   case object CheckOutClosed                                    extends Event
-  case class PaymentStarted(payment: ActorRef[Payment.Command]) extends Event
-  case object CheckoutStarted                                   extends Event
+  case class PaymentStarted(payment: ActorRef[Payment.Command], invocationTime: Long) extends Event
+  case class CheckoutStarted(invocationTime: Long)                                   extends Event
   case object CheckoutCancelled                                 extends Event
-  case class DeliveryMethodSelected(method: String)             extends Event
+  case class DeliveryMethodSelected(method: String, invocationTime: Long)             extends Event
 
   sealed abstract class State(val timerOpt: Option[Cancellable])
   case object WaitingForStart                           extends State(None)
@@ -50,7 +50,6 @@ class TypedCheckout(
 
   def selectingDelivery(timer: Cancellable): Behavior[TypedCheckout.Command] = Behaviors.receive((context, message) => message match {
     case SelectDeliveryMethod(method: String) =>
-      println(method)
       timer.cancel()
       selectingPaymentMethod(checkoutTimer(context))
     case CancelCheckout =>
@@ -63,7 +62,6 @@ class TypedCheckout(
 
   def selectingPaymentMethod(timer: Cancellable): Behavior[TypedCheckout.Command] = Behaviors.receive((context, message) => message match {
     case SelectPayment(payment, orderManagerRef) =>
-      println(payment)
       val typedPaymentActor = context.spawn(new Payment(payment, orderManagerRef, context.self).start, "payment")
       orderManagerRef ! OrderManager.ConfirmPaymentStarted(typedPaymentActor)
       timer.cancel()

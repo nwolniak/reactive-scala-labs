@@ -21,12 +21,12 @@ object TypedCartActor {
 
   sealed trait Event
   case class CheckoutStarted(checkoutRef: ActorRef[TypedCheckout.Command]) extends Event
-  case class ItemAdded(item: Any)                                          extends Event
-  case class ItemRemoved(item: Any)                                        extends Event
+  case class ItemAdded(item: Any, invocationTime: Long)                                          extends Event
+  case class ItemRemoved(item: Any, invocationTime: Long)                                        extends Event
   case object CartEmptied                                                  extends Event
   case object CartExpired                                                  extends Event
   case object CheckoutClosed                                               extends Event
-  case object CheckoutCancelled                                            extends Event
+  case class CheckoutCancelled(invocationTime: Long)                                            extends Event
 
   sealed abstract class State(val timerOpt: Option[Cancellable]) {
     def cart: Cart
@@ -54,6 +54,8 @@ class TypedCartActor {
     case GetItems(sender) =>
       sender ! Cart(Seq.empty)
       empty
+
+    case _ => Behaviors.same
   }
   )
 
@@ -67,6 +69,7 @@ class TypedCartActor {
     case RemoveItem(item: Any) if cart contains item =>
       timer.cancel()
       nonEmpty(cart.removeItem(item), scheduleTimer(context))
+    case RemoveItem(item: Any) => Behaviors.same
     case GetItems(sender) =>
       timer.cancel()
       sender ! cart
@@ -86,6 +89,7 @@ class TypedCartActor {
   def inCheckout(cart: Cart): Behavior[Command] = Behaviors.receive((context, message) => message match {
     case ConfirmCheckoutCancelled => nonEmpty(cart, scheduleTimer(context))
     case ConfirmCheckoutClosed => empty
+    case _ => Behaviors.same
   })
 
 }
