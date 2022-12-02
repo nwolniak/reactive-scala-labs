@@ -2,14 +2,12 @@ package EShop.lab5
 
 import EShop.lab2.TypedCheckout
 import EShop.lab3.OrderManager
-import EShop.lab5.Payment.{PaymentRejected, WrappedPaymentServiceResponse}
-import EShop.lab5.PaymentService.{PaymentClientError, PaymentServerError, PaymentSucceeded}
-import akka.actor.typed.{ActorRef, Behavior, ChildFailed, SupervisorStrategy}
+import EShop.lab5.PaymentService.PaymentSucceeded
 import akka.actor.typed.scaladsl.Behaviors
-import akka.stream.StreamTcpException
+import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy, Terminated}
+import akka.http.scaladsl.model.HttpResponse
 
 import scala.concurrent.duration._
-import akka.actor.typed.Terminated
 
 object Payment {
   sealed trait Message
@@ -30,13 +28,25 @@ object Payment {
       .receive[Message](
         (context, msg) =>
           msg match {
-            case DoPayment                                       => ???
-            case WrappedPaymentServiceResponse(PaymentSucceeded) => ???
+            case DoPayment                                       =>
+              val adapter = context.messageAdapter[PaymentService.Response](WrappedPaymentServiceResponse)
+              val paymentService = Behaviors
+                .supervise[HttpResponse](PaymentService(method, adapter))
+                .onFailure[Exception](restartStrategy)
+              val paymentServiceRef = context.spawnAnonymous(paymentService)
+              context.watch(paymentServiceRef)
+              Behaviors.same
+            case WrappedPaymentServiceResponse(PaymentSucceeded) =>
+              orderManager ! OrderManager.ConfirmPaymentReceived
+              checkout ! TypedCheckout.ConfirmPaymentReceived
+              Behaviors.same
         }
       )
       .receiveSignal {
-        case (context, Terminated(t)) => ???
-      }
+        case (context, Terminated(t)) =>
+          notifyAboutRejection(orderManager, checkout)
+          Behaviors.stopped
+        }
 
   // please use this one to notify when supervised actor was stoped
   private def notifyAboutRejection(
