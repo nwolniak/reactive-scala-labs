@@ -1,9 +1,10 @@
 package EShop.lab5
 
-import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{ActorRef, Behavior}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes}
+import akka.http.scaladsl.client.RequestBuilding.Get
+import akka.http.scaladsl.model.HttpResponse
 
 import scala.util.{Failure, Success}
 
@@ -22,7 +23,25 @@ object PaymentService {
     method: String,
     payment: ActorRef[Response]
   ): Behavior[HttpResponse] = Behaviors.setup { context =>
-    ???
+    implicit val system = context.system
+    implicit val executionContext = context.system.executionContext
+
+    Http().singleRequest(Get(getURI(method))).onComplete {
+      case Failure(exception) => throw exception
+      case Success(value) => context.self ! value
+    }
+
+    Behaviors.receiveMessage {
+      case HttpResponse(code, value, entity, protocol) if code.isSuccess() =>
+        payment ! PaymentSucceeded
+        Behaviors.stopped
+      case HttpResponse(code, value, entity, protocol) =>
+        if (code.intValue() == 408) {
+          throw PaymentServerError()
+        } else {
+          throw PaymentClientError()
+        }
+    }
   }
 
   // remember running PymentServiceServer() before trying payu based payments
