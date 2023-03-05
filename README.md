@@ -1,2 +1,1 @@
 # reactive-lab
-Norbert Wolniak
